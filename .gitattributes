@@ -1,0 +1,8 @@
+# Normalize line endings and treat python files as text with LF
+* text=auto
+*.py text eol=lf
+
+# Mark common binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
