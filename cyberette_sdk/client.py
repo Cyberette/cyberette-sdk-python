@@ -28,6 +28,7 @@ class Cyberette:
         return MEDIA_TYPE_MAP.get(main_type)
     
     async def upload(self, file_path: str):
+        #Moviepy for audio detection
         file_type = self.classify_file(file_path)
         url = ""
         if file_type == "image":
