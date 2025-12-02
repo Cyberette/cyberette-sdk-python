@@ -6,7 +6,7 @@ import asyncio
 # from the `examples/` folder (useful when the package isn't installed).
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from cyberette import Cyberette
+from cyberette_sdk import Cyberette
 
 async def main():
     client = Cyberette(api_key="test_key")

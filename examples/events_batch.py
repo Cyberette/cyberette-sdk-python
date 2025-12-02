@@ -5,7 +5,7 @@ import asyncio
 # Allow examples/ to find the sdk source
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from cyberette import Cyberette
+from cyberette_sdk import Cyberette
 
 async def main():
     sdk = Cyberette(api_key="your_api_key")

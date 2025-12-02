@@ -13,7 +13,7 @@ import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from cyberette import (
+from cyberette_sdk import (
     Segment,
     Detection,
     DeepfakeAnalysis,

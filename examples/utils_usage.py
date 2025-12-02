@@ -5,7 +5,7 @@ import asyncio
 # Ensure the project root is on sys.path
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from cyberette import Cyberette, ResponseParser
+from cyberette_sdk import Cyberette, ResponseParser
 
 
 # Hardcoded response data
