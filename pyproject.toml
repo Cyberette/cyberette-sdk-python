@@ -12,3 +12,9 @@ dependencies = ["aiohttp", "moviepy==2.1.2", "imageio-ffmpeg", "pydantic"]
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
+
+[tool.setuptools]
+packages = ["cyberette_sdk"]
+
+[tool.setuptools.package-dir]
+cyberette = "cyberette_sdk"

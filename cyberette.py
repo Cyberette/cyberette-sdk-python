@@ -1,10 +1,6 @@
 """Top-level re-export for easy import: `from cyberette import Cyberette`."""
 from cyberette_sdk.client import Cyberette
 from cyberette_sdk.utils import ResponseParser
-
-__all__ = ["Cyberette", "ResponseParser"]
-from cyberette_sdk.client import Cyberette
-from cyberette_sdk.utils import ResponseParser
 from cyberette_sdk.models import (
     Segment,
     Detection,
