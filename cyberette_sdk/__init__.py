@@ -13,6 +13,17 @@ from cyberette_sdk.models import (
     ErrorResponse,
 )
 
-__all__ = ["Cyberette", "ResponseParser", "Segment", "Detection", "DeepfakeAnalysis",
-           "ImageResponse", "AudioResponse", "VideoResponse", "MultimodalVideoResponse",
-           "BatchResultItem", "BatchResult", "ErrorResponse"]
+__all__ = [
+    "Cyberette",
+    "ResponseParser",
+    "Segment",
+    "Detection",
+    "DeepfakeAnalysis",
+    "ImageResponse",
+    "AudioResponse",
+    "VideoResponse",
+    "MultimodalVideoResponse",
+    "BatchResultItem",
+    "BatchResult",
+    "ErrorResponse",
+]

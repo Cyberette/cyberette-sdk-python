@@ -1,12 +1,14 @@
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 
 
 class ResponseParser:
     """Helper class for parsing Cyberette SDK detection responses."""
 
     @staticmethod
-    def safe_get(d: dict, keys: list, default=None):
+    def safe_get(d: Optional[dict[Any, Any]], keys: list, default=None) -> Any:
         """Traverse a nested dict safely, return default if key path is missing."""
+        if d is None or not isinstance(d, dict):
+            return default
         for key in keys:
             if not isinstance(d, dict):
                 return default
@@ -34,15 +36,17 @@ class ResponseParser:
     def get_detection_percentage(result: dict, media: str = "main") -> Optional[float]:
         target = result.get(media) if media in ("video", "audio") else result
         # fallback for images where 'score' is used instead of 'percentage'
-        return ResponseParser.safe_get(target, ["deepfake", "detection", "percentage"]) or ResponseParser.safe_get(
-            target, ["deepfake", "detection", "score"]
-        )
+        return ResponseParser.safe_get(
+            target, ["deepfake", "detection", "percentage"]
+        ) or ResponseParser.safe_get(target, ["deepfake", "detection", "score"])
 
     @staticmethod
     def get_segments(result: dict, media: str = "main") -> List[Dict]:
         """Return segments if they exist; empty list otherwise."""
         target = result.get(media) if media in ("video", "audio") else result
-        return ResponseParser.safe_get(target, ["deepfake", "detection", "segments"], default=[])
+        return ResponseParser.safe_get(
+            target, ["deepfake", "detection", "segments"], default=[]
+        )
 
     @staticmethod
     def format_detection(result: dict, media: str = "main") -> str:
@@ -63,7 +67,9 @@ class ResponseParser:
             end = seg.get("end")
             score = seg.get("score")
             verdict = seg.get("verdict")
-            formatted.append(f"Segment: {start} -> {end}, Verdict: {verdict} ({score}%)")
+            formatted.append(
+                f"Segment: {start} -> {end}, Verdict: {verdict} ({score}%)"
+            )
         return formatted
 
     @staticmethod

@@ -10,6 +10,7 @@ MEDIA_TYPE_MAP = {
     "audio": "audio",
 }
 
+
 class AsyncEventEmitter:
     def __init__(self):
         self._events = {}
@@ -44,10 +45,14 @@ class AsyncEventEmitter:
 
 
 class Cyberette:
-    def __init__(self, api_key: str, base_url_image: str = "https://api-image-dev-neu-002.azurewebsites.net/api/image", 
-                 base_url_audio: str = "https://api-audio-dev-neu-002.azurewebsites.net/api/audio",
-                 base_url_video: str = "http://localhost:5300/api/video", 
-                 base_url_video_audio: str = "http://localhost:5300/api/video_and_audio"):
+    def __init__(
+        self,
+        api_key: str,
+        base_url_image: str = "https://api-image-dev-neu-002.azurewebsites.net/api/image",
+        base_url_audio: str = "https://api-audio-dev-neu-002.azurewebsites.net/api/audio",
+        base_url_video: str = "http://localhost:5300/api/video",
+        base_url_video_audio: str = "http://localhost:5300/api/video_and_audio",
+    ):
         self.api_key = api_key
         self.base_url_image = base_url_image
         self.base_url_audio = base_url_audio
@@ -63,24 +68,23 @@ class Cyberette:
             def decorator(cb):
                 self.events.on(event_name, cb)
                 return cb
+
             return decorator
         else:
             # direct style
             self.events.on(event_name, callback)
 
-
-
-    #File classification based on mime type
+    # File classification based on mime type
     def classify_file(self, file_path: str):
         mime, _ = mimetypes.guess_type(file_path)  # e.g. "image/png"
         if not mime:
             return None
-        
+
         main_type = mime.split("/")[0]
 
         # For image, audio, video
         return MEDIA_TYPE_MAP.get(main_type)
-    
+
     # Check if a video file has an audio track.
     # Import moviepy lazily so importing the SDK doesn't fail when moviepy
     # is not installed and the user doesn't need video-audio detection.
@@ -89,7 +93,7 @@ class Cyberette:
         has_audio_track = clip.audio is not None
         clip.close()
         return has_audio_track
-    
+
     async def upload(self, file_path: str):
         # Emit event: upload started
         await self.events.emit("upload_started", file_path=file_path)
@@ -110,9 +114,9 @@ class Cyberette:
             url = self.base_url_audio
         else:
             raise ValueError("Unsupported file type")
-        
+
         headers = {"Authorization": f"Bearer {self.api_key}"}
-        
+
         try:
             with open(file_path, "rb") as f:
                 form = aiohttp.FormData()
@@ -124,7 +128,9 @@ class Cyberette:
                     r.raise_for_status()
                     data = await r.json()
 
-                    await self.events.emit("upload_success", file_path=file_path, response=data)
+                    await self.events.emit(
+                        "upload_success", file_path=file_path, response=data
+                    )
                     return data
         except FileNotFoundError:
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -133,7 +139,7 @@ class Cyberette:
         except Exception as e:
             await self.events.emit("upload_error", file_path=file_path, error=e)
             raise
-    
+
     async def batch_upload(self, file_paths: list[str]):
         await self.events.emit("batch_started", files=file_paths)
 
@@ -143,7 +149,9 @@ class Cyberette:
         async def process(file_path):
             try:
                 result = await self.upload(file_path)
-                await self.events.emit("batch_file_success", file=file_path, result=result)
+                await self.events.emit(
+                    "batch_file_success", file=file_path, result=result
+                )
                 return {"file": file_path, "result": result, "error": None}
             except Exception as e:
                 await self.events.emit("batch_file_error", file=file_path, error=e)
