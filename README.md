@@ -146,7 +146,7 @@ async def batch_upload():
         ]
         
         # Upload all files in parallel
-        results = await client.batch_upload(files, max_workers=4)
+        results = await client.batch_upload(files)
         
         # Access results
         for file_result in results:
