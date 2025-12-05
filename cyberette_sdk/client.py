@@ -50,8 +50,8 @@ class Cyberette:
         api_key: str,
         base_url_image: str = "https://api-image-dev-neu-002.azurewebsites.net/api/image",
         base_url_audio: str = "https://api-audio-dev-neu-002.azurewebsites.net/api/audio",
-        base_url_video: str = "http://localhost:5300/api/video",
-        base_url_video_audio: str = "http://localhost:5300/api/video_and_audio",
+        base_url_video: str = "https://api-video-dev-neu-002.azurewebsites.net/api/video",
+        base_url_video_audio: str = "https://api-video-dev-neu-002.azurewebsites.net/api/video_and_audio",
     ):
         self.api_key = api_key
         self.base_url_image = base_url_image
@@ -86,8 +86,6 @@ class Cyberette:
         return MEDIA_TYPE_MAP.get(main_type)
 
     # Check if a video file has an audio track.
-    # Import moviepy lazily so importing the SDK doesn't fail when moviepy
-    # is not installed and the user doesn't need video-audio detection.
     def has_audio(self, video_path):
         clip = moviepy.VideoFileClip(video_path)
         has_audio_track = clip.audio is not None
