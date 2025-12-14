@@ -3,6 +3,7 @@ import os
 import mimetypes
 import moviepy
 import asyncio
+import sys
 
 MEDIA_TYPE_MAP = {
     "image": "image",
@@ -54,6 +55,7 @@ class Cyberette:
         base_url_video_audio: str = "https://api-video-dev-neu-002.azurewebsites.net/api/video_and_audio",
     ):
         self.api_key = api_key
+        # TODO Add authentication with API key, raises error
         self.base_url_image = base_url_image
         self.base_url_audio = base_url_audio
         self.base_url_video = base_url_video
@@ -87,10 +89,21 @@ class Cyberette:
 
     # Check if a video file has an audio track.
     def has_audio(self, video_path):
-        clip = moviepy.VideoFileClip(video_path)
-        has_audio_track = clip.audio is not None
-        clip.close()
-        return has_audio_track
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        try:
+            sys.stdout = open(os.devnull, 'w')
+            sys.stderr = open(os.devnull, 'w')
+            
+            clip = moviepy.VideoFileClip(video_path)
+            has_audio_track = clip.audio is not None
+            clip.close()
+            return has_audio_track
+        finally:
+            sys.stdout.close()
+            sys.stderr.close()
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
 
     async def upload(self, file_path: str):
         # Emit event: upload started
@@ -101,12 +114,12 @@ class Cyberette:
         if file_type == "image":
             url = self.base_url_image
         elif file_type == "video":
-            print("Checking for audio track in video...")
+            # print("Checking for audio track in video...")
             if self.has_audio(file_path):
-                print("Audio track detected in video.")
+                # print("Audio track detected in video.")
                 url = self.base_url_video_audio
             else:
-                print("No audio track detected in video.")
+                # print("No audio track detected in video.")
                 url = self.base_url_video
         elif file_type == "audio":
             url = self.base_url_audio

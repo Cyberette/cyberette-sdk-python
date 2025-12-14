@@ -109,7 +109,7 @@ class TestUpload:
                         
                         # Should use base_url_video (not base_url_video_audio)
                         call_args = mock_post.call_args
-                        assert "localhost:5300/api/video" in call_args[0][0]
+                        assert "https://api-video-dev-neu-002.azurewebsites.net/api/video" in call_args[0][0]
                         assert "video_and_audio" not in call_args[0][0]
         finally:
             await client.close()
@@ -130,7 +130,7 @@ class TestUpload:
                         
                         # Should use base_url_video_audio
                         call_args = mock_post.call_args
-                        assert "localhost:5300/api/video_and_audio" in call_args[0][0]
+                        assert "https://api-video-dev-neu-002.azurewebsites.net/api/video_and_audio" in call_args[0][0]
         finally:
             await client.close()
 
