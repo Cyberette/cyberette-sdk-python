@@ -355,7 +355,7 @@ For support and questions, visit [docs.cyberette.ai](https://docs.cyberette.ai) 
 
 ## Changelog
 
-### v0.1.1 (Initial Release)
+### v0.1.2 (Initial Release)
 - Core SDK with async/await support
 - Automatic file classification and routing
 - Batch processing with parallel requests
