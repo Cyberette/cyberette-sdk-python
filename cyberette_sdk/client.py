@@ -50,9 +50,10 @@ class Cyberette:
         self,
         api_key: str,
         base_url_image: str = "https://api-image-dev-neu-002.azurewebsites.net/api/image",
-        base_url_audio: str = "https://api-audio-dev-neu-002.azurewebsites.net/api/audio",
+        base_url_audio: str = "https://api-audio-dev-neu-003.azurewebsites.net/api/audio",
         base_url_video: str = "https://api-video-dev-neu-002.azurewebsites.net/api/video",
         base_url_video_audio: str = "https://api-video-dev-neu-002.azurewebsites.net/api/video_and_audio",
+        timeout_seconds: float = 300.0,
     ):
         self.api_key = api_key
         # TODO Add authentication with API key, raises error
@@ -60,7 +61,8 @@ class Cyberette:
         self.base_url_audio = base_url_audio
         self.base_url_video = base_url_video
         self.base_url_video_audio = base_url_video_audio
-        self.session = aiohttp.ClientSession()
+        timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+        self.session = aiohttp.ClientSession(timeout=timeout)
         # Add event system
         self.events = AsyncEventEmitter()
 
@@ -105,7 +107,12 @@ class Cyberette:
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-    async def upload(self, file_path: str):
+    async def upload(
+        self,
+        file_path: str,
+        retries: int = 3,
+        retry_backoff_seconds: float = 1.0,
+    ):
         # Emit event: upload started
         await self.events.emit("upload_started", file_path=file_path)
 
@@ -128,51 +135,100 @@ class Cyberette:
 
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
-        try:
-            with open(file_path, "rb") as f:
-                form = aiohttp.FormData()
-                form.add_field("file", f, filename=os.path.basename(file_path))
+        def _should_retry_response_status(status: int) -> bool:
+            return status in (408, 425, 429, 500, 502, 503, 504)
 
-                async with self.session.post(url, headers=headers, data=form) as r:
-                    await self.events.emit("upload_sent", file_path=file_path, url=url)
+        def _is_transient_error(exc: BaseException) -> bool:
+            if isinstance(exc, asyncio.TimeoutError):
+                return True
+            if isinstance(exc, aiohttp.ClientConnectionError):
+                return True
+            if isinstance(exc, aiohttp.ServerTimeoutError):
+                return True
+            if isinstance(exc, aiohttp.ClientOSError):
+                return True
+            return False
 
-                    r.raise_for_status()
-                    data = await r.json()
+        attempt = 0
+        while True:
+            try:
+                with open(file_path, "rb") as f:
+                    form = aiohttp.FormData()
+                    form.add_field("file", f, filename=os.path.basename(file_path))
 
-                    await self.events.emit(
-                        "upload_success", file_path=file_path, response=data
-                    )
-                    return data
-        except FileNotFoundError:
-            raise FileNotFoundError(f"File not found: {file_path}")
-        except aiohttp.ClientError as e:
-            raise Exception(f"Network error: {str(e)}")
-        except Exception as e:
-            await self.events.emit("upload_error", file_path=file_path, error=e)
-            raise
+                    async with self.session.post(url, headers=headers, data=form) as r:
+                        await self.events.emit("upload_sent", file_path=file_path, url=url)
 
-    async def batch_upload(self, file_paths: list[str]):
+                        if r.status >= 400:
+                            if attempt < retries and _should_retry_response_status(r.status):
+                                delay = retry_backoff_seconds * (2**attempt)
+                                await asyncio.sleep(delay)
+                                attempt += 1
+                                continue
+
+                            r.raise_for_status()
+
+                        data = await r.json()
+
+                        await self.events.emit(
+                            "upload_success", file_path=file_path, response=data
+                        )
+                        return data
+            except FileNotFoundError:
+                raise FileNotFoundError(f"File not found: {file_path}")
+            except aiohttp.ClientResponseError as e:
+                if attempt < retries and e.status is not None and _should_retry_response_status(e.status):
+                    delay = retry_backoff_seconds * (2**attempt)
+                    await asyncio.sleep(delay)
+                    attempt += 1
+                    continue
+                raise Exception(f"Network error: {str(e)}")
+            except aiohttp.ClientError as e:
+                if attempt < retries and _is_transient_error(e):
+                    delay = retry_backoff_seconds * (2**attempt)
+                    await asyncio.sleep(delay)
+                    attempt += 1
+                    continue
+                raise Exception(f"Network error: {str(e)}")
+            except asyncio.TimeoutError as e:
+                if attempt < retries:
+                    delay = retry_backoff_seconds * (2**attempt)
+                    await asyncio.sleep(delay)
+                    attempt += 1
+                    continue
+                raise Exception(f"Network error: {str(e)}")
+            except Exception as e:
+                await self.events.emit("upload_error", file_path=file_path, error=e)
+                raise
+
+    async def batch_upload(self, file_paths: list[str], concurrency: int = 5):
         await self.events.emit("batch_started", files=file_paths)
 
+        if concurrency < 1:
+            raise ValueError("concurrency must be >= 1")
+
+        semaphore = asyncio.Semaphore(concurrency)
         tasks = []
-        results = []
 
         async def process(file_path):
+            await semaphore.acquire()
             try:
-                result = await self.upload(file_path)
-                await self.events.emit(
-                    "batch_file_success", file=file_path, result=result
-                )
-                return {"file": file_path, "result": result, "error": None}
-            except Exception as e:
-                await self.events.emit("batch_file_error", file=file_path, error=e)
-                return {"file": file_path, "result": None, "error": e}
+                try:
+                    result = await self.upload(file_path)
+                    await self.events.emit(
+                        "batch_file_success", file=file_path, result=result
+                    )
+                    return {"file": file_path, "result": result, "error": None}
+                except Exception as e:
+                    await self.events.emit("batch_file_error", file=file_path, error=e)
+                    return {"file": file_path, "result": None, "error": e}
+            finally:
+                semaphore.release()
 
-        # start all tasks in parallel
+        # Start all tasks; semaphore enforces concurrency.
         for fp in file_paths:
             tasks.append(asyncio.create_task(process(fp)))
 
-        # wait for all
         results = await asyncio.gather(*tasks)
 
         await self.events.emit("batch_finished", results=results)
