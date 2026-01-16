@@ -60,6 +60,7 @@ class TestUpload:
             with patch("builtins.open", create=True):
                 with patch.object(client.session, "post") as mock_post:
                     mock_response = AsyncMock()
+                    mock_response.status = 200
                     mock_response.json = AsyncMock(return_value={"id": "123", "deepfake": False})
                     mock_response.raise_for_status = Mock()
                     mock_post.return_value.__aenter__.return_value = mock_response
@@ -68,7 +69,7 @@ class TestUpload:
                     
                     # Verify endpoint called with correct URL
                     call_args = mock_post.call_args
-                    assert "api-image-dev-neu-002" in call_args[0][0]
+                    assert call_args[0][0] == client.base_url_image
                     assert result == {"id": "123", "deepfake": False}
         finally:
             await client.close()
@@ -80,6 +81,7 @@ class TestUpload:
             with patch("builtins.open", create=True):
                 with patch.object(client.session, "post") as mock_post:
                     mock_response = AsyncMock()
+                    mock_response.status = 200
                     mock_response.json = AsyncMock(return_value={"id": "456", "deepfake": True})
                     mock_response.raise_for_status = Mock()
                     mock_post.return_value.__aenter__.return_value = mock_response
@@ -88,7 +90,7 @@ class TestUpload:
                     
                     # Verify endpoint called with correct URL
                     call_args = mock_post.call_args
-                    assert "api-audio-dev-neu-002" in call_args[0][0]
+                    assert call_args[0][0] == client.base_url_audio
                     assert result == {"id": "456", "deepfake": True}
         finally:
             await client.close()
@@ -101,6 +103,7 @@ class TestUpload:
                 with patch.object(client, "has_audio", return_value=False):
                     with patch.object(client.session, "post") as mock_post:
                         mock_response = AsyncMock()
+                        mock_response.status = 200
                         mock_response.json = AsyncMock(return_value={"id": "789"})
                         mock_response.raise_for_status = Mock()
                         mock_post.return_value.__aenter__.return_value = mock_response
@@ -109,7 +112,7 @@ class TestUpload:
                         
                         # Should use base_url_video (not base_url_video_audio)
                         call_args = mock_post.call_args
-                        assert "https://api-video-dev-neu-002.azurewebsites.net/api/video" in call_args[0][0]
+                        assert call_args[0][0] == client.base_url_video
                         assert "video_and_audio" not in call_args[0][0]
         finally:
             await client.close()
@@ -122,6 +125,7 @@ class TestUpload:
                 with patch.object(client, "has_audio", return_value=True):
                     with patch.object(client.session, "post") as mock_post:
                         mock_response = AsyncMock()
+                        mock_response.status = 200
                         mock_response.json = AsyncMock(return_value={"id": "999"})
                         mock_response.raise_for_status = Mock()
                         mock_post.return_value.__aenter__.return_value = mock_response
@@ -130,7 +134,7 @@ class TestUpload:
                         
                         # Should use base_url_video_audio
                         call_args = mock_post.call_args
-                        assert "https://api-video-dev-neu-002.azurewebsites.net/api/video_and_audio" in call_args[0][0]
+                        assert call_args[0][0] == client.base_url_video_audio
         finally:
             await client.close()
 

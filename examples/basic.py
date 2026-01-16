@@ -9,7 +9,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cyberette_sdk import Cyberette
 
 async def main():
-    sdk = Cyberette(api_key="your_api_key")
+    sdk = Cyberette(
+    api_key="YOUR_KEY",
+    verdict_thresholds=(0.4, 0.6),  # Optional Threshold (<0.35 Real, 0.35-<0.70 AI Modified, >=0.70 AI Generated)
+    verdict_labels=("Authentic", "Manipulated", "Synthetic") # Optional Labels
+    )
     
     try:
         result = await sdk.upload("testing_data\\test_audio.mp3")

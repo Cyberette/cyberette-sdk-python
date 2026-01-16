@@ -10,6 +10,11 @@ MEDIA_TYPE_MAP = {
     "video": "video",
     "audio": "audio",
 }
+DEFAULT_BASE_URL_IMAGE = "https://api-image-dev-neu-002.azurewebsites.net/api/image"
+DEFAULT_BASE_URL_VIDEO = "https://api-video-dev-neu-003.azurewebsites.net/api/video"
+DEFAULT_BASE_URL_AUDIO = "https://api-audio-dev-neu-004.azurewebsites.net/api/audio"
+DEFAULT_BASE_URL_VIDEO_AUDIO = "https://api-video-dev-neu-003.azurewebsites.net/api/video_and_audio"
+DEFAULT_API_GATEWAY = "https://cyberette-api-gateway-01.azurewebsites.net/upload"
 
 
 class AsyncEventEmitter:
@@ -49,11 +54,15 @@ class Cyberette:
     def __init__(
         self,
         api_key: str,
-        base_url_image: str = "https://api-image-dev-neu-002.azurewebsites.net/api/image",
-        base_url_audio: str = "https://api-audio-dev-neu-003.azurewebsites.net/api/audio",
-        base_url_video: str = "https://api-video-dev-neu-002.azurewebsites.net/api/video",
-        base_url_video_audio: str = "https://api-video-dev-neu-002.azurewebsites.net/api/video_and_audio",
+        base_url_image: str = DEFAULT_BASE_URL_IMAGE,
+        base_url_audio: str = DEFAULT_BASE_URL_AUDIO,
+        base_url_video: str = DEFAULT_BASE_URL_VIDEO,
+        base_url_video_audio: str = DEFAULT_BASE_URL_VIDEO_AUDIO,
+        base_url_api_gateway: str = DEFAULT_API_GATEWAY,
+        use_gateway: bool = False,
         timeout_seconds: float = 300.0,
+        verdict_thresholds: tuple[float, float] | None = None,  # (modified_threshold, generated_threshold)
+        verdict_labels: tuple[str, str, str] = ("Real", "AI Modified", "AI Generated")
     ):
         self.api_key = api_key
         # TODO Add authentication with API key, raises error
@@ -61,6 +70,22 @@ class Cyberette:
         self.base_url_audio = base_url_audio
         self.base_url_video = base_url_video
         self.base_url_video_audio = base_url_video_audio
+        self.base_url_api_gateway = base_url_api_gateway
+        self.use_gateway = use_gateway
+        if verdict_thresholds is not None:
+            if (
+                not isinstance(verdict_thresholds, tuple)
+                or len(verdict_thresholds) != 2
+            ):
+                raise ValueError("verdict_thresholds must be a tuple(modified_threshold, generated_threshold) or None")
+
+            modified_th, generated_th = verdict_thresholds
+            if not (0.0 <= modified_th <= 1.0 and 0.0 <= generated_th <= 1.0):
+                raise ValueError("verdict_thresholds values must be within [0.0, 1.0]")
+            if modified_th > generated_th:
+                raise ValueError("modified_threshold must be <= generated_threshold")
+        self.verdict_thresholds = verdict_thresholds
+        self.verdict_labels = verdict_labels
         timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         self.session = aiohttp.ClientSession(timeout=timeout)
         # Add event system
@@ -107,6 +132,51 @@ class Cyberette:
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
+    def classify_verdict_from_thresholds(
+        self,
+        score: float,
+        thresholds: tuple[float, float] | None = None, # (modified_threshold, generated_threshold)
+        labels: tuple[str, str, str] | None = None,  
+    ) -> str:
+        """
+        Classify into one of: 'Real' | 'AI Modified' | 'AI Generated'
+
+        Rules:
+          score < modified_threshold              => 'Real'
+          modified_threshold <= score < generated_threshold => 'AI Modified'
+          score >= generated_threshold            => 'AI Generated'
+
+        If `thresholds` is None, uses `self.verdict_thresholds` if present.
+        """
+        th = thresholds if thresholds is not None else getattr(self, "verdict_thresholds", None)
+        if th is None:
+            raise ValueError("thresholds not provided and self.verdict_thresholds is not set")
+
+        if not isinstance(th, tuple) or len(th) != 2:
+            raise ValueError("thresholds must be a tuple(modified_threshold, generated_threshold)")
+
+        modified_th, generated_th = th
+
+        try:
+            s = float(score)
+            modified_th = float(modified_th)
+            generated_th = float(generated_th)
+        except (TypeError, ValueError):
+            raise ValueError("score and thresholds must be numeric")
+
+        if not (0.0 <= s <= 1.0):
+            raise ValueError("score must be within [0.0, 1.0]")
+        if not (0.0 <= modified_th <= 1.0 and 0.0 <= generated_th <= 1.0):
+            raise ValueError("thresholds must be within [0.0, 1.0]")
+        if modified_th > generated_th:
+            raise ValueError("modified_threshold must be <= generated_threshold")
+
+        if s < modified_th:
+            return labels[0]
+        if s < generated_th:
+            return labels[1]
+        return labels[2]
+
     async def upload(
         self,
         file_path: str,
@@ -118,20 +188,23 @@ class Cyberette:
 
         file_type = self.classify_file(file_path)
         url = ""
-        if file_type == "image":
-            url = self.base_url_image
-        elif file_type == "video":
-            # print("Checking for audio track in video...")
-            if self.has_audio(file_path):
-                # print("Audio track detected in video.")
-                url = self.base_url_video_audio
-            else:
-                # print("No audio track detected in video.")
-                url = self.base_url_video
-        elif file_type == "audio":
-            url = self.base_url_audio
+        if self.use_gateway:
+            url = self.base_url_api_gateway
         else:
-            raise ValueError("Unsupported file type")
+            if file_type == "image":
+                url = self.base_url_image
+            elif file_type == "video":
+                # print("Checking for audio track in video...")
+                if self.has_audio(file_path):
+                    # print("Audio track detected in video.")
+                    url = self.base_url_video_audio
+                else:
+                    # print("No audio track detected in video.")
+                    url = self.base_url_video
+            elif file_type == "audio":
+                url = self.base_url_audio
+            else:
+                raise ValueError("Unsupported file type")
 
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
@@ -169,6 +242,27 @@ class Cyberette:
                             r.raise_for_status()
 
                         data = await r.json()
+
+                        # Reclassify verdict only when thresholds are configured
+                        if self.verdict_thresholds is not None:
+                            # print(data.get("audio", {}))
+                            if data.get("audio", {}) != {}:
+                                det = data.get("audio", {}).get("deepfake", {}).get("detection", {})
+                                score = det.get("score")
+                                if score is not None:
+                                    det["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
+                                    data["audio"]["deepfake"]["detection"] = det
+                                det = data.get("video", {}).get("deepfake", {}).get("detection", {})
+                                score = det.get("score")
+                                if score is not None:
+                                    det["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
+                                    data["video"]["deepfake"]["detection"] = det
+                            else:
+                                det = data.get("deepfake", {}).get("detection", {})
+                                score = det.get("score")
+                                if score is not None:
+                                    det["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
+                                    data["deepfake"]["detection"] = det
 
                         await self.events.emit(
                             "upload_success", file_path=file_path, response=data
