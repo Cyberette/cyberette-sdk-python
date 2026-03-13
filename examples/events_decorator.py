@@ -10,7 +10,7 @@ from cyberette_sdk import Cyberette
 
 async def main():
     print("Initializing SDK...")
-    sdk = Cyberette(api_key="your-api-key")
+    sdk = Cyberette(api_key="")
 
     # ---- Event handlers ----
     @sdk.on("upload_started")

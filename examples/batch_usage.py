@@ -9,7 +9,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cyberette_sdk import Cyberette
 
 async def main():
-    sdk = Cyberette(api_key="your_api_key")
+    sdk = Cyberette(api_key="")
     
     try:
         results = await sdk.batch_upload(["testing_data\\song.mp3", "testing_data\\song.wav", "testing_data\\test_audio.mp3"])

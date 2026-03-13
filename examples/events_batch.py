@@ -8,7 +8,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cyberette_sdk import Cyberette
 
 async def main():
-    sdk = Cyberette(api_key="your_api_key")
+    sdk = Cyberette(api_key="")
 
     # ------------------------------
     # EVENT HANDLERS

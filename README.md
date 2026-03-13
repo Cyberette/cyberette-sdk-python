@@ -2,15 +2,15 @@
 
 **Python SDK for Cyberette Deepfake Detection APIs**
 
-A powerful, async-first Python SDK for detecting deepfakes in images, videos, and audio files. Automatically classifies media types, handles batch processing with parallel requests, and provides comprehensive error handling.
+A powerful, async-first Python SDK for detecting deepfakes in images, videos, and audio files. Uploads are sent through the Cyberette API Gateway, with built-in batch processing and comprehensive error handling.
 
 ---
 
 ## Features
 
-- ✨ **Automatic File Classification** — Detects media type (image, video, audio) and routes to the correct endpoint
+- ✨ **API Gateway Routing** — Sends all uploads through a single API gateway endpoint
 - ⚡ **Async-First Architecture** — Built on `aiohttp` for high-concurrency, non-blocking operations
-- 🎯 **Intelligent Video Routing** — Automatically detects audio in videos and routes to appropriate endpoint
+- 🔐 **API Key Header Support** — Sends `cyberette-api-key` on every upload request
 - 📦 **Batch Processing** — Process multiple files in parallel with built-in batch API
 - 🔔 **Event System** — Real-time event listeners for upload, completion, and error handling
 - 🛠️ **Helper Functions** — ResponseParser for easy result extraction and formatting
@@ -30,7 +30,6 @@ pip install cyberette
 - Python 3.8+
 - aiohttp
 - pydantic
-- moviepy (for audio detection in videos)
 
 ---
 
@@ -111,22 +110,14 @@ asyncio.run(main())
 
 ## Core Features
 
-### Automatic File Classification
+### API Gateway Upload Routing
 
-The SDK automatically detects file types and routes them to the correct endpoint. Just pass the file path:
+The SDK sends every upload request to the configured API gateway endpoint:
 
 ```python
-# Image
-result = await client.upload("photo.jpg")  # Routes to image endpoint
-
-# Audio
-result = await client.upload("audio.mp3")  # Routes to audio endpoint
-
-# Video (visual only)
-result = await client.upload("video.mp4")  # Routes to video endpoint
-
-# Video with audio
-result = await client.upload("video_with_sound.mp4")  # Auto-detects audio, routes to video+audio endpoint
+result = await client.upload("photo.jpg")
+result = await client.upload("audio.mp3")
+result = await client.upload("video.mp4")
 ```
 
 ### Batch Processing with Parallel Requests
@@ -251,14 +242,14 @@ Initialize the SDK client.
 
 #### `async upload(file_path: str) → dict`
 
-Upload and analyze a media file. Automatically classifies and routes to correct endpoint.
+Upload and analyze a media file through the API gateway.
 
 **Parameters:**
 - `file_path` (str) — Path to the file to upload
 
 **Returns:** Detection result dictionary
 
-**Raises:** `FileNotFoundError`, `ValueError`, `Exception`
+**Raises:** `FileNotFoundError`, `Exception`
 
 #### `async batch_upload(file_paths: List[str]) → List[dict]`
 
@@ -269,12 +260,6 @@ Upload multiple files in parallel.
 
 
 **Returns:** List of detection results
-
-#### `def classify_file(file_path: str) → str | None`
-
-Classify a file type by MIME type.
-
-**Returns:** `"image"`, `"video"`, `"audio"`, or `None`
 
 #### `async close()`
 
@@ -329,8 +314,6 @@ async def main():
         result = await client.upload("image.jpg")
     except FileNotFoundError:
         print("File not found")
-    except ValueError:
-        print("Invalid file type")
     except Exception as e:
         print(f"API error: {e}")
     finally:
@@ -357,7 +340,7 @@ For support and questions, visit [docs.cyberette.ai](https://docs.cyberette.ai) 
 
 ### v0.1.2 (Initial Release)
 - Core SDK with async/await support
-- Automatic file classification and routing
+- Gateway-only upload routing with `cyberette-api-key` header
 - Batch processing with parallel requests
 - Event system for real-time updates
 - ResponseParser helper functions

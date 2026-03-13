@@ -8,7 +8,7 @@ version = "0.1.2"
 description = "Python SDK for Your Detection API"
 authors = [{name="Stefan Saveski"}]
 license = "MIT"
-dependencies = ["aiohttp", "moviepy==2.1.2", "imageio-ffmpeg", "pydantic"]
+dependencies = ["aiohttp", "pydantic"]
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]

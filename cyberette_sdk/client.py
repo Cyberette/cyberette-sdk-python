@@ -1,20 +1,7 @@
 import aiohttp
 import os
-import mimetypes
-import moviepy
 import asyncio
-import sys
-
-MEDIA_TYPE_MAP = {
-    "image": "image",
-    "video": "video",
-    "audio": "audio",
-}
-DEFAULT_BASE_URL_IMAGE = "https://api-image-dev-neu-002.azurewebsites.net/api/image"
-DEFAULT_BASE_URL_VIDEO = "https://api-video-dev-neu-003.azurewebsites.net/api/video"
-DEFAULT_BASE_URL_AUDIO = "https://api-audio-dev-neu-004.azurewebsites.net/api/audio"
-DEFAULT_BASE_URL_VIDEO_AUDIO = "https://api-video-dev-neu-003.azurewebsites.net/api/video_and_audio"
-DEFAULT_API_GATEWAY = "https://cyberette-api-gateway-01.azurewebsites.net/upload"
+DEFAULT_API_GATEWAY = "https://cyberette-api-gateway-01.azurewebsites.net/api/upload"
 
 
 class AsyncEventEmitter:
@@ -54,14 +41,14 @@ class Cyberette:
     def __init__(
         self,
         api_key: str,
-        base_url_image: str = DEFAULT_BASE_URL_IMAGE,
-        base_url_audio: str = DEFAULT_BASE_URL_AUDIO,
-        base_url_video: str = DEFAULT_BASE_URL_VIDEO,
-        base_url_video_audio: str = DEFAULT_BASE_URL_VIDEO_AUDIO,
+        base_url_image: str | None = None,
+        base_url_audio: str | None = None,
+        base_url_video: str | None = None,
+        base_url_video_audio: str | None = None,
         base_url_api_gateway: str = DEFAULT_API_GATEWAY,
-        use_gateway: bool = False,
+        use_gateway: bool = True,
         timeout_seconds: float = 300.0,
-        verdict_thresholds: tuple[float, float] | None = None,  # (modified_threshold, generated_threshold)
+        verdict_thresholds: tuple[float, float] = (0.5, 0.7),  # (modified_threshold, generated_threshold)
         verdict_labels: tuple[str, str, str] = ("Real", "AI Modified", "AI Generated")
     ):
         self.api_key = api_key
@@ -102,35 +89,6 @@ class Cyberette:
         else:
             # direct style
             self.events.on(event_name, callback)
-
-    # File classification based on mime type
-    def classify_file(self, file_path: str):
-        mime, _ = mimetypes.guess_type(file_path)  # e.g. "image/png"
-        if not mime:
-            return None
-
-        main_type = mime.split("/")[0]
-
-        # For image, audio, video
-        return MEDIA_TYPE_MAP.get(main_type)
-
-    # Check if a video file has an audio track.
-    def has_audio(self, video_path):
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-        try:
-            sys.stdout = open(os.devnull, 'w')
-            sys.stderr = open(os.devnull, 'w')
-            
-            clip = moviepy.VideoFileClip(video_path)
-            has_audio_track = clip.audio is not None
-            clip.close()
-            return has_audio_track
-        finally:
-            sys.stdout.close()
-            sys.stderr.close()
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
 
     def classify_verdict_from_thresholds(
         self,
@@ -186,27 +144,8 @@ class Cyberette:
         # Emit event: upload started
         await self.events.emit("upload_started", file_path=file_path)
 
-        file_type = self.classify_file(file_path)
-        url = ""
-        if self.use_gateway:
-            url = self.base_url_api_gateway
-        else:
-            if file_type == "image":
-                url = self.base_url_image
-            elif file_type == "video":
-                # print("Checking for audio track in video...")
-                if self.has_audio(file_path):
-                    # print("Audio track detected in video.")
-                    url = self.base_url_video_audio
-                else:
-                    # print("No audio track detected in video.")
-                    url = self.base_url_video
-            elif file_type == "audio":
-                url = self.base_url_audio
-            else:
-                raise ValueError("Unsupported file type")
-
-        headers = {"Authorization": f"Bearer {self.api_key}"}
+        url = self.base_url_api_gateway
+        headers = {"cyberette-api-key": self.api_key}
 
         def _should_retry_response_status(status: int) -> bool:
             return status in (408, 425, 429, 500, 502, 503, 504)
@@ -246,28 +185,22 @@ class Cyberette:
                         # Reclassify verdict only when thresholds are configured
                         if self.verdict_thresholds is not None:
                             # print(data.get("audio", {}))
-                            if data.get("audio", {}) != {}:
-                                det = data.get("audio", {}).get("deepfake", {}).get("detection", {})
-                                score = det.get("score")
+                            if data["downstream_body"].get("audio") is not None:
+                                score = data["downstream_body"]["audio"].get("score")
                                 if score is not None:
-                                    det["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
-                                    data["audio"]["deepfake"]["detection"] = det
-                                det = data.get("video", {}).get("deepfake", {}).get("detection", {})
-                                score = det.get("score")
+                                    data["downstream_body"]["audio"]["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
+                                score = data["downstream_body"]["video"].get("score")
                                 if score is not None:
-                                    det["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
-                                    data["video"]["deepfake"]["detection"] = det
+                                    data["downstream_body"]["video"]["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
                             else:
-                                det = data.get("deepfake", {}).get("detection", {})
-                                score = det.get("score")
+                                score = data["downstream_body"].get("score")
                                 if score is not None:
-                                    det["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
-                                    data["deepfake"]["detection"] = det
+                                    data["downstream_body"]["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
 
                         await self.events.emit(
                             "upload_success", file_path=file_path, response=data
                         )
-                        return data
+                        return data["downstream_body"] if "downstream_body" in data else data
             except FileNotFoundError:
                 raise FileNotFoundError(f"File not found: {file_path}")
             except aiohttp.ClientResponseError as e:
@@ -312,6 +245,8 @@ class Cyberette:
                     await self.events.emit(
                         "batch_file_success", file=file_path, result=result
                     )
+                    
+
                     return {"file": file_path, "result": result, "error": None}
                 except Exception as e:
                     await self.events.emit("batch_file_error", file=file_path, error=e)

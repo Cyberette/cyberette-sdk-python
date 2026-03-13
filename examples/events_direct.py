@@ -9,7 +9,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cyberette_sdk import Cyberette
 
 async def main():
-    client = Cyberette(api_key="test_key")
+    client = Cyberette(api_key="")
 
     # Direct style: register event listeners
     client.on("upload_started", lambda file_path: print(f"Upload started: {file_path}"))

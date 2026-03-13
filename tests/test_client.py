@@ -1,60 +1,16 @@
 """Unit tests for cyberette_sdk.client.Cyberette."""
 import pytest
 import asyncio
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from unittest.mock import Mock, patch, AsyncMock
 from cyberette_sdk.client import Cyberette
-
-
-class TestClassifyFile:
-    """Tests for file classification based on mime type."""
-
-    def test_classify_image(self):
-        async def run_test():
-            client = Cyberette(api_key="test_key")
-            try:
-                assert client.classify_file("testing_data\\photo.png") == "image"
-                assert client.classify_file("testing_data\\photo.jpg") == "image"
-            finally:
-                await client.close()
-        asyncio.run(run_test())
-
-    def test_classify_video(self):
-        async def run_test():
-            client = Cyberette(api_key="test_key")
-            try:
-                assert client.classify_file("testing_data\\movie.mp4") == "video"
-                assert client.classify_file("testing_data\\movie.avi") == "video"
-            finally:
-                await client.close()
-        asyncio.run(run_test())
-
-    def test_classify_audio(self):
-        async def run_test():
-            client = Cyberette(api_key="test_key")
-            try:
-                assert client.classify_file("testing_data\\song.mp3") == "audio"
-                assert client.classify_file("testing_data\\song.wav") == "audio"
-            finally:
-                await client.close()
-        asyncio.run(run_test())
-
-    def test_classify_unsupported(self):
-        async def run_test():
-            client = Cyberette(api_key="test_key")
-            try:
-                assert client.classify_file("testing_data\\document.txt") is None
-                assert client.classify_file("testing_data\\file.pdf") is None
-            finally:
-                await client.close()
-        asyncio.run(run_test())
 
 
 @pytest.mark.asyncio
 class TestUpload:
-    """Tests for file upload to appropriate endpoints."""
+    """Tests for file upload through API gateway."""
 
     async def test_upload_image(self):
-        """Test uploading an image file to the image endpoint."""
+        """Test uploading an image file through the API gateway endpoint."""
         client = Cyberette(api_key="test_key")
         try:
             with patch("builtins.open", create=True):
@@ -67,15 +23,16 @@ class TestUpload:
                     
                     result = await client.upload("testing_data\\photo.png")
                     
-                    # Verify endpoint called with correct URL
+                    # Verify endpoint called with gateway URL
                     call_args = mock_post.call_args
-                    assert call_args[0][0] == client.base_url_image
+                    assert call_args[0][0] == client.base_url_api_gateway
+                    assert call_args[1]["headers"]["cyberette-api-key"] == "test_key"
                     assert result == {"id": "123", "deepfake": False}
         finally:
             await client.close()
 
     async def test_upload_audio(self):
-        """Test uploading an audio file to the audio endpoint."""
+        """Test uploading an audio file through the API gateway endpoint."""
         client = Cyberette(api_key="test_key")
         try:
             with patch("builtins.open", create=True):
@@ -88,62 +45,32 @@ class TestUpload:
                     
                     result = await client.upload("testing_data\\song.mp3")
                     
-                    # Verify endpoint called with correct URL
+                    # Verify endpoint called with gateway URL
                     call_args = mock_post.call_args
-                    assert call_args[0][0] == client.base_url_audio
+                    assert call_args[0][0] == client.base_url_api_gateway
+                    assert call_args[1]["headers"]["cyberette-api-key"] == "test_key"
                     assert result == {"id": "456", "deepfake": True}
         finally:
             await client.close()
 
-    async def test_upload_video_without_audio(self):
-        """Test uploading a video without audio track."""
+    async def test_upload_video_uses_gateway(self):
+        """Test uploading a video file uses gateway endpoint."""
         client = Cyberette(api_key="test_key")
         try:
             with patch("builtins.open", create=True):
-                with patch.object(client, "has_audio", return_value=False):
-                    with patch.object(client.session, "post") as mock_post:
-                        mock_response = AsyncMock()
-                        mock_response.status = 200
-                        mock_response.json = AsyncMock(return_value={"id": "789"})
-                        mock_response.raise_for_status = Mock()
-                        mock_post.return_value.__aenter__.return_value = mock_response
-                        
-                        result = await client.upload("testing_data\\movie.mp4")
-                        
-                        # Should use base_url_video (not base_url_video_audio)
-                        call_args = mock_post.call_args
-                        assert call_args[0][0] == client.base_url_video
-                        assert "video_and_audio" not in call_args[0][0]
-        finally:
-            await client.close()
+                with patch.object(client.session, "post") as mock_post:
+                    mock_response = AsyncMock()
+                    mock_response.status = 200
+                    mock_response.json = AsyncMock(return_value={"id": "789"})
+                    mock_response.raise_for_status = Mock()
+                    mock_post.return_value.__aenter__.return_value = mock_response
 
-    async def test_upload_video_with_audio(self):
-        """Test uploading a video with audio track."""
-        client = Cyberette(api_key="test_key")
-        try:
-            with patch("builtins.open", create=True):
-                with patch.object(client, "has_audio", return_value=True):
-                    with patch.object(client.session, "post") as mock_post:
-                        mock_response = AsyncMock()
-                        mock_response.status = 200
-                        mock_response.json = AsyncMock(return_value={"id": "999"})
-                        mock_response.raise_for_status = Mock()
-                        mock_post.return_value.__aenter__.return_value = mock_response
-                        
-                        result = await client.upload("testing_data\\movie.mp4")
-                        
-                        # Should use base_url_video_audio
-                        call_args = mock_post.call_args
-                        assert call_args[0][0] == client.base_url_video_audio
-        finally:
-            await client.close()
+                    result = await client.upload("testing_data\\movie.mp4")
 
-    async def test_upload_unsupported_file(self):
-        """Test uploading an unsupported file type raises ValueError."""
-        client = Cyberette(api_key="test_key")
-        try:
-            with pytest.raises(ValueError, match="Unsupported file type"):
-                await client.upload("testing_data\\document.txt")
+                    call_args = mock_post.call_args
+                    assert call_args[0][0] == client.base_url_api_gateway
+                    assert call_args[1]["headers"]["cyberette-api-key"] == "test_key"
+                    assert result == {"id": "789"}
         finally:
             await client.close()
 
@@ -193,28 +120,19 @@ class TestSession:
 
 
 class TestCustomURLs:
-    """Tests for custom endpoint URLs."""
+    """Tests for custom API gateway URL."""
 
-    def test_custom_urls(self):
+    def test_custom_gateway_url(self):
         async def run_test():
-            custom_image = "https://custom-image-api.com/upload"
-            custom_video = "https://custom-video-api.com/upload"
-            custom_audio = "https://custom-audio-api.com/upload"
-            custom_video_audio = "https://custom-video-audio-api.com/upload"
+            custom_gateway = "https://custom-gateway-api.com/upload"
             
             custom_client = Cyberette(
                 api_key="test_key",
-                base_url_image=custom_image,
-                base_url_video=custom_video,
-                base_url_audio=custom_audio,
-                base_url_video_audio=custom_video_audio,
+                base_url_api_gateway=custom_gateway,
             )
             
             try:
-                assert custom_client.base_url_image == custom_image
-                assert custom_client.base_url_video == custom_video
-                assert custom_client.base_url_audio == custom_audio
-                assert custom_client.base_url_video_audio == custom_video_audio
+                assert custom_client.base_url_api_gateway == custom_gateway
             finally:
                 await custom_client.close()
         

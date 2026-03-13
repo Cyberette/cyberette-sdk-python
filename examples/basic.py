@@ -10,8 +10,8 @@ from cyberette_sdk import Cyberette
 
 async def main():
     sdk = Cyberette(
-    api_key="YOUR_KEY",
-    verdict_thresholds=(0.4, 0.6),  # Optional Threshold (<0.35 Real, 0.35-<0.70 AI Modified, >=0.70 AI Generated)
+    api_key="",  # Required API Key
+    verdict_thresholds=(0.4, 0.6),  # Optional Threshold (<0.35 Real, 0.35-<0.70 AI Modified, >=0.70 AI Generated) - Default (0.5, 0.7)
     verdict_labels=("Authentic", "Manipulated", "Synthetic") # Optional Labels
     )
     
