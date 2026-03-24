@@ -16,13 +16,13 @@ async def main():
     )
     
     try:
-        result = await sdk.upload("testing_data\\test_audio.mp3")
+        result = await sdk.upload(r"C:\Users\User\Desktop\Work-Cyberette\testing_data\test_audio.mp3")
         print("Success:", result)
-        resultimg = await sdk.upload("testing_data\\dog.jpg")
+        resultimg = await sdk.upload(r"C:\Users\User\Desktop\Work-Cyberette\testing_data\dog.jpg")
         print("Success:", resultimg)
-        resultvid = await sdk.upload("testing_data\\test_video.mp4")
+        resultvid = await sdk.upload(r"C:\Users\User\Desktop\Work-Cyberette\testing_data\test_video.mp4")
         print("Success:", resultvid)
-        resultvid_aud = await sdk.upload("testing_data\\test_video_audio.mp4")
+        resultvid_aud = await sdk.upload(r"C:\Users\User\Desktop\Work-Cyberette\testing_data\test_video_audio.mp4")
         print("Success:", resultvid_aud)
     except Exception as e:
         print("Error:", e)

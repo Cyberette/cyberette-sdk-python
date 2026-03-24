@@ -56,6 +56,20 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+```python
+from cyberette_sdk import Cyberette
+import asyncio
+
+async def main():
+    # Use as async context manager for safe session handling
+    async with Cyberette(api_key="YOUR_API_KEY") as client:
+        result = await client.upload("image.jpg")
+        print(f"Verdict: {result['deepfake']['detection']['verdict']}")
+        print(f"Confidence: {result['deepfake']['detection']['score']}%")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
 
 ### Using ResponseParser Helper
 
@@ -82,6 +96,18 @@ async def main():
 
 asyncio.run(main())
 ```
+async def main():
+    async with Cyberette(api_key="YOUR_API_KEY") as client:
+        result = await client.upload("video.mp4")
+        # Extract detection info easily
+        verdict = ResponseParser.get_detection_verdict(result)
+        confidence = ResponseParser.get_detection_percentage(result)
+        model = ResponseParser.get_model_name(result)
+        print(f"Model: {model}")
+        print(f"Verdict: {verdict}")
+        print(f"Confidence: {confidence}%")
+
+asyncio.run(main())
 
 ### With Pydantic Models for Type Safety
 
@@ -105,6 +131,15 @@ async def main():
 
 asyncio.run(main())
 ```
+async def main():
+    async with Cyberette(api_key="YOUR_API_KEY") as client:
+        result = await client.upload("image.jpg")
+        # Validate and parse with Pydantic
+        image = ImageResponse(**result)
+        print(f"Verdict: {image.deepfake.detection.verdict}")
+        print(f"Confidence: {image.deepfake.detection.score}%")
+
+asyncio.run(main())
 
 ---
 
@@ -147,6 +182,21 @@ async def batch_upload():
 
 asyncio.run(batch_upload())
 ```
+async def batch_upload():
+    async with Cyberette(api_key="YOUR_API_KEY") as client:
+        files = [
+            "image1.jpg",
+            "image2.jpg",
+            "video.mp4",
+            "audio.mp3"
+        ]
+        # Upload all files in parallel
+        results = await client.batch_upload(files)
+        # Access results
+        for file_result in results:
+            print(f"{file_result['file']}: {file_result['result']}")
+
+asyncio.run(batch_upload())
 
 ### Event Handling
 
@@ -177,6 +227,25 @@ async def upload_with_events():
 
 asyncio.run(upload_with_events())
 ```
+async def upload_with_events():
+    async with Cyberette(api_key="YOUR_API_KEY") as client:
+        # Register event handlers
+        async def on_upload_started(file_path):
+            print(f"Upload started: {file_path}")
+
+        async def on_upload_success(file_path, response):
+            print(f"Upload success: {file_path}, response: {response}")
+
+        def on_upload_error(file_path, error):
+            print(f"Error: {file_path}, error: {error}")
+
+        client.on("upload_started", on_upload_started)
+        client.on("upload_success", on_upload_success)
+        client.on("upload_error", on_upload_error)
+
+        result = await client.upload("video.mp4")
+
+asyncio.run(upload_with_events())
 
 ### ResponseParser Helper Functions
 
@@ -319,6 +388,14 @@ async def main():
     finally:
         await client.close()
 ```
+async def main():
+    async with Cyberette(api_key="YOUR_API_KEY") as client:
+        try:
+            result = await client.upload("image.jpg")
+        except FileNotFoundError:
+            print("File not found")
+        except Exception as e:
+            print(f"API error: {e}")
 
 ---
 

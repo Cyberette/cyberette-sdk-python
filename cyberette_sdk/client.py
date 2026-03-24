@@ -1,6 +1,7 @@
 import aiohttp
 import os
 import asyncio
+import inspect
 DEFAULT_API_GATEWAY = "https://cyberette-api-gateway-01.azurewebsites.net/api/upload"
 
 
@@ -17,14 +18,12 @@ class AsyncEventEmitter:
 
         for handler in handlers:
             # async handler
-            if asyncio.iscoroutinefunction(handler):
-
+            if inspect.iscoroutinefunction(handler):
                 async def safe_call(h=handler):
                     try:
                         await h(*args, **kwargs)
                     except Exception as e:
                         print(f"[Event Error] {event_name}: {e}")
-
                 tasks.append(asyncio.create_task(safe_call()))
             else:
                 # sync handler
@@ -38,6 +37,14 @@ class AsyncEventEmitter:
 
 
 class Cyberette:
+
+    async def __aenter__(self):
+        # Allow use as an async context manager
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.close()
+        
     def __init__(
         self,
         api_key: str,
@@ -52,7 +59,6 @@ class Cyberette:
         verdict_labels: tuple[str, str, str] = ("Real", "AI Modified", "AI Generated")
     ):
         self.api_key = api_key
-        # TODO Add authentication with API key, raises error
         self.base_url_image = base_url_image
         self.base_url_audio = base_url_audio
         self.base_url_video = base_url_video
@@ -182,20 +188,21 @@ class Cyberette:
 
                         data = await r.json()
 
-                        # Reclassify verdict only when thresholds are configured
-                        if self.verdict_thresholds is not None:
-                            # print(data.get("audio", {}))
-                            if data["downstream_body"].get("audio") is not None:
-                                score = data["downstream_body"]["audio"].get("score")
+                        # Reclassify verdict only when thresholds are configured and downstream_body exists
+                        if self.verdict_thresholds is not None and "downstream_body" in data:
+                            downstream = data["downstream_body"]
+                            # print(downstream.get("audio", {}))
+                            if isinstance(downstream, dict) and downstream.get("audio") is not None:
+                                score = downstream["audio"].get("score")
                                 if score is not None:
-                                    data["downstream_body"]["audio"]["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
-                                score = data["downstream_body"]["video"].get("score")
+                                    downstream["audio"]["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
+                                score = downstream.get("video", {}).get("score")
                                 if score is not None:
-                                    data["downstream_body"]["video"]["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
+                                    downstream["video"]["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
                             else:
-                                score = data["downstream_body"].get("score")
+                                score = downstream.get("score") if isinstance(downstream, dict) else None
                                 if score is not None:
-                                    data["downstream_body"]["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
+                                    downstream["verdict"] = self.classify_verdict_from_thresholds(score, labels=self.verdict_labels)
 
                         await self.events.emit(
                             "upload_success", file_path=file_path, response=data
@@ -262,6 +269,29 @@ class Cyberette:
 
         await self.events.emit("batch_finished", results=results)
         return results
+
+    async def upload_folder(self, folder_path: str, concurrency: int = 5):
+        """
+        Upload all files in the given folder using batch_upload logic.
+        Args:
+            folder_path (str): Path to the folder containing files to upload.
+            concurrency (int): Number of concurrent uploads (default 5).
+        Returns:
+            List of results from batch_upload.
+        """
+        if not os.path.isdir(folder_path):
+            raise ValueError(f"Provided path is not a directory: {folder_path}")
+
+        # List all files (non-recursive)
+        file_paths = [
+            os.path.join(folder_path, f)
+            for f in os.listdir(folder_path)
+            if os.path.isfile(os.path.join(folder_path, f))
+        ]
+        if not file_paths:
+            raise ValueError(f"No files found in directory: {folder_path}")
+
+        return await self.batch_upload(file_paths, concurrency=concurrency)
 
     async def close(self):
         await self.session.close()
