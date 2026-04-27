@@ -64,3 +64,6 @@ credentials.json
 # Misc
 *.log
 *.db
+
+# Local pip test environment
+pip_test/
