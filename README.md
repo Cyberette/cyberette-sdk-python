@@ -1,22 +1,8 @@
 # cyberette-sdk-python
 
-**Python SDK for Cyberette Deepfake Detection APIs**
+**Python SDK for Cyberette Deepfake Detection**
 
-A powerful, async-first Python SDK for detecting deepfakes in images, videos, and audio files. Uploads are sent through the Cyberette API Gateway, with built-in batch processing and comprehensive error handling.
-
----
-
-## Features
-
-- ✨ **API Gateway Routing** — Sends all uploads through a single API gateway endpoint
-- ⚡ **Async-First Architecture** — Built on `aiohttp` for high-concurrency, non-blocking operations
-- 🔐 **API Key Header Support** — Sends `cyberette-api-key` on every upload request
-- 📦 **Batch Processing** — Process multiple files in parallel with built-in batch API
-- 🔔 **Event System** — Real-time event listeners for upload, completion, and error handling
-- 🛠️ **Helper Functions** — ResponseParser for easy result extraction and formatting
-- 📊 **Data Models** — Pydantic models for type-safe response validation
-- 🧪 **Comprehensive Testing** — 107 unit tests with 92% code coverage
-- 📚 **Full Documentation** — Check [docs.cyberette.ai](https://docs.cyberette.ai) for detailed API docs
+An async-first Python SDK for detecting deepfakes in images, videos, and audio files using the Cyberette API.
 
 ---
 
@@ -26,128 +12,54 @@ A powerful, async-first Python SDK for detecting deepfakes in images, videos, an
 pip install cyberette
 ```
 
-**Requirements:**
-- Python 3.8+
-- aiohttp
-- pydantic
+**Requirements:** Python 3.8+, `aiohttp`, `pydantic`
 
 ---
 
 ## Quick Start
 
-### Basic Upload
-
 ```python
 from cyberette_sdk import Cyberette
 import asyncio
 
 async def main():
-    # Initialize client
-    client = Cyberette(api_key="YOUR_API_KEY")
-    
-    try:
-        # Upload and analyze a file
-        result = await client.upload("image.jpg")
-        print(f"Verdict: {result['deepfake']['detection']['verdict']}")
-        print(f"Confidence: {result['deepfake']['detection']['score']}%")
-    finally:
-        await client.close()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-```python
-from cyberette_sdk import Cyberette
-import asyncio
-
-async def main():
-    # Use as async context manager for safe session handling
     async with Cyberette(api_key="YOUR_API_KEY") as client:
         result = await client.upload("image.jpg")
-        print(f"Verdict: {result['deepfake']['detection']['verdict']}")
-        print(f"Confidence: {result['deepfake']['detection']['score']}%")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using ResponseParser Helper
-
-```python
-from cyberette_sdk import Cyberette, ResponseParser
-import asyncio
-
-async def main():
-    client = Cyberette(api_key="YOUR_API_KEY")
-    
-    try:
-        result = await client.upload("video.mp4")
-        
-        # Extract detection info easily
-        verdict = ResponseParser.get_detection_verdict(result)
-        confidence = ResponseParser.get_detection_percentage(result)
-        model = ResponseParser.get_model_name(result)
-        
-        print(f"Model: {model}")
-        print(f"Verdict: {verdict}")
-        print(f"Confidence: {confidence}%")
-    finally:
-        await client.close()
+        print(result)
 
 asyncio.run(main())
 ```
-async def main():
-    async with Cyberette(api_key="YOUR_API_KEY") as client:
-        result = await client.upload("video.mp4")
-        # Extract detection info easily
-        verdict = ResponseParser.get_detection_verdict(result)
-        confidence = ResponseParser.get_detection_percentage(result)
-        model = ResponseParser.get_model_name(result)
-        print(f"Model: {model}")
-        print(f"Verdict: {verdict}")
-        print(f"Confidence: {confidence}%")
-
-asyncio.run(main())
-
-### With Pydantic Models for Type Safety
-
-```python
-from cyberette_sdk import Cyberette, ImageResponse
-import asyncio
-
-async def main():
-    client = Cyberette(api_key="YOUR_API_KEY")
-    
-    try:
-        result = await client.upload("image.jpg")
-        
-        # Validate and parse with Pydantic
-        image = ImageResponse(**result)
-        
-        print(f"Verdict: {image.deepfake.detection.verdict}")
-        print(f"Confidence: {image.deepfake.detection.score}%")
-    finally:
-        await client.close()
-
-asyncio.run(main())
-```
-async def main():
-    async with Cyberette(api_key="YOUR_API_KEY") as client:
-        result = await client.upload("image.jpg")
-        # Validate and parse with Pydantic
-        image = ImageResponse(**result)
-        print(f"Verdict: {image.deepfake.detection.verdict}")
-        print(f"Confidence: {image.deepfake.detection.score}%")
-
-asyncio.run(main())
 
 ---
 
-## Core Features
+## Initialization
 
-### API Gateway Upload Routing
+```python
+client = Cyberette(
+    api_key="YOUR_API_KEY",           # Required
+    timeout_seconds=300.0,            # Default: 300s
+    verdict_thresholds=(0.5, 0.7),    # (modified_threshold, generated_threshold)
+    verdict_labels=("Real", "AI Modified", "AI Generated"),
+)
+```
 
-The SDK sends every upload request to the configured API gateway endpoint:
+### Verdict Thresholds
+
+The SDK reclassifies the API score into a verdict using two thresholds:
+
+| Score range | Verdict |
+|---|---|
+| `< modified_threshold` | `"Real"` (label[0]) |
+| `>= modified_threshold` and `< generated_threshold` | `"AI Modified"` (label[1]) |
+| `>= generated_threshold` | `"AI Generated"` (label[2]) |
+
+Defaults: `(0.5, 0.7)` thresholds, `("Real", "AI Modified", "AI Generated")` labels.
+
+---
+
+## Uploading Files
+
+### Single upload
 
 ```python
 result = await client.upload("photo.jpg")
@@ -155,271 +67,173 @@ result = await client.upload("audio.mp3")
 result = await client.upload("video.mp4")
 ```
 
-### Batch Processing with Parallel Requests
+Retries automatically on transient errors (3 retries, exponential backoff).
 
-Process multiple files efficiently with automatic parallelization:
-
-```python
-async def batch_upload():
-    client = Cyberette(api_key="YOUR_API_KEY")
-    
-    try:
-        files = [
-            "image1.jpg",
-            "image2.jpg",
-            "video.mp4",
-            "audio.mp3"
-        ]
-        
-        # Upload all files in parallel
-        results = await client.batch_upload(files)
-        
-        # Access results
-        for file_result in results:
-            print(f"{file_result['file']}: {file_result['verdict']}")
-    finally:
-        await client.close()
-
-asyncio.run(batch_upload())
-```
-async def batch_upload():
-    async with Cyberette(api_key="YOUR_API_KEY") as client:
-        files = [
-            "image1.jpg",
-            "image2.jpg",
-            "video.mp4",
-            "audio.mp3"
-        ]
-        # Upload all files in parallel
-        results = await client.batch_upload(files)
-        # Access results
-        for file_result in results:
-            print(f"{file_result['file']}: {file_result['result']}")
-
-asyncio.run(batch_upload())
-
-### Event Handling
-
-Listen for real-time events during processing:
+### Batch upload
 
 ```python
-async def upload_with_events():
-    client = Cyberette(api_key="YOUR_API_KEY")
-    
-    # Register event handlers
-    async def on_upload_start(event):
-        print(f"Upload started: {event.data['file']}")
-    
-    async def on_upload_complete(event):
-        print(f"Upload complete: {event.data['result']}")
-    
-    def on_error(event):
-        print(f"Error: {event.data['error']}")
-    
-    client.emitter.on("upload_start", on_upload_start)
-    client.emitter.on("upload_complete", on_upload_complete)
-    client.emitter.on("error", on_error)
-    
-    try:
-        result = await client.upload("video.mp4")
-    finally:
-        await client.close()
+files = ["image1.jpg", "image2.jpg", "video.mp4", "audio.mp3"]
+results = await client.batch_upload(files, concurrency=5)
 
-asyncio.run(upload_with_events())
+for item in results:
+    print(item["file"], item["result"], item["error"])
 ```
-async def upload_with_events():
-    async with Cyberette(api_key="YOUR_API_KEY") as client:
-        # Register event handlers
-        async def on_upload_started(file_path):
-            print(f"Upload started: {file_path}")
 
-        async def on_upload_success(file_path, response):
-            print(f"Upload success: {file_path}, response: {response}")
+Each item in the returned list: `{"file": str, "result": dict | None, "error": Exception | None}`
 
-        def on_upload_error(file_path, error):
-            print(f"Error: {file_path}, error: {error}")
+### Folder upload
 
-        client.on("upload_started", on_upload_started)
-        client.on("upload_success", on_upload_success)
-        client.on("upload_error", on_upload_error)
+```python
+results = await client.upload_folder("path/to/folder", concurrency=5)
+```
 
-        result = await client.upload("video.mp4")
+Uploads all files in the folder (non-recursive).
 
-asyncio.run(upload_with_events())
+---
 
-### ResponseParser Helper Functions
+## Event System
 
-Extract and format detection results easily:
+Register sync or async handlers for upload lifecycle events.
+
+```python
+# Decorator style
+@client.on("upload_started")
+async def on_start(file_path):
+    print(f"Starting: {file_path}")
+
+# Direct style
+client.on("upload_success", lambda file_path, response: print(f"Done: {file_path}"))
+```
+
+### Available events
+
+| Event | Keyword args |
+|---|---|
+| `upload_started` | `file_path` |
+| `upload_sent` | `file_path`, `url` |
+| `upload_success` | `file_path`, `response` |
+| `upload_error` | `file_path`, `error` |
+| `batch_started` | `files` |
+| `batch_file_success` | `file`, `result` |
+| `batch_file_error` | `file`, `error` |
+| `batch_finished` | `results` |
+
+---
+
+## ResponseParser
+
+Helper for extracting fields from response dicts.
 
 ```python
 from cyberette_sdk import ResponseParser
 
-# Extract detection info
-verdict = ResponseParser.get_detection_verdict(result)
+verdict    = ResponseParser.get_detection_verdict(result)
 confidence = ResponseParser.get_detection_percentage(result)
-model_name = ResponseParser.get_model_name(result)
-model_version = ResponseParser.get_model_version(result)
-segments = ResponseParser.get_segments(result)  # For audio/video
+model      = ResponseParser.get_model_name(result)
+version    = ResponseParser.get_model_version(result)
+segments   = ResponseParser.get_segments(result)
 
-# Format for display
-summary = ResponseParser.format_detection(result)
-segment_summaries = ResponseParser.format_segments(result)
+summary    = ResponseParser.format_detection(result)
+# "Model: <name> v<version>, Verdict: <verdict> (<confidence>%)"
 
-# Batch processing
-batch_summaries = ResponseParser.summarize_batch(batch_results)
+seg_lines  = ResponseParser.format_segments(result)
+# ["Segment: 0.0 -> 2.5, Verdict: Real (0.12%)", ...]
 ```
 
-### Type-Safe Data Models
-
-Use Pydantic models for validation:
+For multimodal video responses, pass `media="audio"` or `media="video"`:
 
 ```python
-from cyberette_sdk import (
-    ImageResponse,
-    AudioResponse,
-    VideoResponse,
-    MultimodalVideoResponse,
-    Detection,
-    DeepfakeAnalysis,
-    Segment
-)
+audio_verdict = ResponseParser.get_detection_verdict(result, media="audio")
+video_verdict = ResponseParser.get_detection_verdict(result, media="video")
+```
 
-# Parse and validate responses
+### Batch summary
+
+```python
+summaries = ResponseParser.summarize_batch(results)
+# [{"file": ..., "verdict": ..., "percentage": ..., "error": ...}, ...]
+```
+
+---
+
+## Pydantic Models
+
+Type-safe wrappers for API responses.
+
+```python
+from cyberette_sdk import ImageResponse, AudioResponse, VideoResponse, MultimodalVideoResponse
+
 image = ImageResponse(**result)
+print(image.deepfake.detection.verdict)
+print(image.deepfake.detection.score)
+
 audio = AudioResponse(**result)
+print(audio.deepfake.detection.segments)
+
 video = VideoResponse(**result)
-multimodal = MultimodalVideoResponse(**result)
 
-# Access nested data with type safety
-verdict = image.deepfake.detection.verdict
-confidence = image.deepfake.detection.score
-segments = audio.deepfake.detection.segments
+multi = MultimodalVideoResponse(**result)
+print(multi.audio.deepfake.detection.verdict)
+print(multi.video.deepfake.detection.verdict)
 ```
 
----
-
-## API Reference
-
-### Cyberette Client
-
-#### `__init__(api_key: str)`
-
-Initialize the SDK client.
-
-**Parameters:**
-- `api_key` (str) — Your Cyberette API key
-
-#### `async upload(file_path: str) → dict`
-
-Upload and analyze a media file through the API gateway.
-
-**Parameters:**
-- `file_path` (str) — Path to the file to upload
-
-**Returns:** Detection result dictionary
-
-**Raises:** `FileNotFoundError`, `Exception`
-
-#### `async batch_upload(file_paths: List[str]) → List[dict]`
-
-Upload multiple files in parallel.
-
-**Parameters:**
-- `file_paths` (List[str]) — List of file paths
-
-
-**Returns:** List of detection results
-
-#### `async close()`
-
-Close the aiohttp session and cleanup resources.
-
----
-
-## Examples
-
-More detailed examples are available in the [examples/](./examples/) folder:
-
-- `basic.py` — Basic upload and analysis
-- `datamodels_usage.py` — Pydantic model usage
-- `batch_usage.py` — Batch upload example
-- `events_direct.py` — Event listener examples
-- `utils_usage.py` — ResponseParser helper usage
-
-For comprehensive documentation, visit [docs.cyberette.ai](https://docs.cyberette.ai).
-
----
-
-## Testing
-
-Run the comprehensive test suite:
-
-```bash
-# Run all tests
-pytest tests/ -v
-
-# With coverage report
-pytest tests/ --cov=cyberette_sdk --cov-report=html
-
-# Run specific test file
-pytest tests/test_client.py -v
-```
-
-**Test Coverage:** 107 unit tests with 92% code coverage
+**All models:** `Segment`, `Detection`, `DeepfakeAnalysis`, `ImageResponse`, `AudioResponse`, `VideoResponse`, `MultimodalVideoResponse`, `BatchResultItem`, `BatchResult`, `ErrorResponse`
 
 ---
 
 ## Error Handling
 
-The SDK provides clear exceptions for different error scenarios:
-
 ```python
-from cyberette_sdk import Cyberette
-
-async def main():
-    client = Cyberette(api_key="YOUR_API_KEY")
-    
+async with Cyberette(api_key="YOUR_API_KEY") as client:
     try:
         result = await client.upload("image.jpg")
     except FileNotFoundError:
         print("File not found")
     except Exception as e:
-        print(f"API error: {e}")
-    finally:
-        await client.close()
+        print(f"Error: {e}")
 ```
-async def main():
-    async with Cyberette(api_key="YOUR_API_KEY") as client:
-        try:
-            result = await client.upload("image.jpg")
-        except FileNotFoundError:
-            print("File not found")
-        except Exception as e:
-            print(f"API error: {e}")
+
+---
+
+## Examples
+
+See the [examples/](./examples/) folder:
+
+- `basic.py` — Single file upload
+- `batch_usage.py` — Batch upload
+- `upload_folder.py` — Folder upload
+- `events_direct.py` — Event listeners (direct style)
+- `events_decorator.py` — Event listeners (decorator style)
+- `events_batch.py` — Batch events
+
+---
+
+## Testing
+
+```bash
+pytest tests/ -v
+pytest tests/ --cov=cyberette_sdk --cov-report=html
+```
 
 ---
 
 ## License
 
-Licensed under the Apache License 2.0. See [LICENSE](./LICENSE) for details.
-
----
-
-## Author
-
-**Stefan Saveski**
-
-For support and questions, visit [docs.cyberette.ai](https://docs.cyberette.ai) or contact support.
+Apache License 2.0. See [LICENSE](./LICENSE) for details.
 
 ---
 
 ## Changelog
 
-### v0.1.2 (Initial Release)
-- Core SDK with async/await support
-- Gateway-only upload routing with `cyberette-api-key` header
-- Batch processing with parallel requests
-- Event system for real-time updates
-- ResponseParser helper functions
-- Pydantic data models
-- 107 unit tests with 92% coverage
+### v0.1.3
+- Added `upload_folder()` method
+- Retry logic with exponential backoff on transient errors
+- Configurable verdict thresholds and labels
+
+### v0.1.2
+- Initial release
+- Async upload via API gateway
+- Batch processing with concurrency control
+- Event system
+- ResponseParser helpers
+- Pydantic response models
