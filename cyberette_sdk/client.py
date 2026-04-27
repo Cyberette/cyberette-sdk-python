@@ -2,7 +2,7 @@ import aiohttp
 import os
 import asyncio
 import inspect
-DEFAULT_API_GATEWAY = "https://cyberette-api-gateway-01.azurewebsites.net/api/upload"
+DEFAULT_API_GATEWAY = "https://inference.api.dev.cyberette.ai/api/upload"
 
 
 class AsyncEventEmitter:
